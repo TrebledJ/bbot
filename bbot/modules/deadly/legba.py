@@ -1,0 +1,231 @@
+import json
+from pathlib import Path
+from bbot.errors import WordlistError
+from bbot.modules.base import BaseModule
+
+# key: <common-protocol-name> value: <legba-protocol-plugin-name>
+# List with `legba -L`
+PROTOCOL_LEGBA_PLUGIN_MAP = {
+    "postgresql": "pgsql",
+}
+
+
+# Maps common protocol names to Legba protocol plugin names
+def map_protocol_to_legba_plugin_name(common_protocol_name: str) -> str:
+    return PROTOCOL_LEGBA_PLUGIN_MAP.get(common_protocol_name, common_protocol_name)
+
+
+class legba(BaseModule):
+    watched_events = ["PROTOCOL"]
+    produced_events = ["VULNERABILITY"]
+    flags = ["active", "aggressive", "deadly"]
+    per_hostport_only = True
+    meta = {
+        "description": "Credential bruteforcing supporting various services.",
+        "created_date": "2025-07-18",
+        "author": "@christianfl",
+    }
+    _module_threads = 25
+    scope_distance_modifier = None
+
+    options = {
+        "ssh_wordlist": "https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/ssh-betterdefaultpasslist.txt",
+        "ftp_wordlist": "https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/ftp-betterdefaultpasslist.txt",
+        "telnet_wordlist": "https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/telnet-betterdefaultpasslist.txt",
+        "vnc_wordlist": "https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/vnc-betterdefaultpasslist.txt",
+        "mssql_wordlist": "https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/mssql-betterdefaultpasslist.txt",
+        "mysql_wordlist": "https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/mysql-betterdefaultpasslist.txt",
+        "postgresql_wordlist": "https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/postgres-betterdefaultpasslist.txt",
+        "concurrency": 3,
+        "rate_limit": 3,
+    }
+
+    options_desc = {
+        "ssh_wordlist": "Wordlist URL for SSH combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/ssh-betterdefaultpasslist.txt)",
+        "ftp_wordlist": "Wordlist URL for FTP combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/ftp-betterdefaultpasslist.txt)",
+        "telnet_wordlist": "Wordlist URL for TELNET combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/telnet-betterdefaultpasslist.txt)",
+        "vnc_wordlist": "Wordlist URL for VNC combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/vnc-betterdefaultpasslist.txt)",
+        "mssql_wordlist": "Wordlist URL for MSSQL combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/mssql-betterdefaultpasslist.txt)",
+        "mysql_wordlist": "Wordlist URL for MySQL combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/mysql-betterdefaultpasslist.txt)",
+        "postgresql_wordlist": "Wordlist URL for PostgreSQL combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/postgres-betterdefaultpasslist.txt)",
+        "concurrency": "Number of concurrent workers, gets overridden for SSH (default 3)",
+        "rate_limit": "Limit the number of requests per second, gets overridden for SSH (default 3)",
+    }
+
+    deps_common = ["rust"]
+    deps_ansible = [
+        {
+            "name": "Install dev tools (Debian)",
+            "package": {
+                "name": ["libssl-dev", "libsmbclient-dev", "pkg-config", "cmake"],
+                "state": "present",
+            },
+            "become": True,
+            "when": "ansible_facts['distribution'] == 'Debian'",
+            "ignore_errors": True,
+        },
+        {
+            "name": "Get legba repo",
+            "git": {
+                "repo": "https://github.com/evilsocket/legba",
+                "dest": "#{BBOT_TEMP}/legba",
+                "version": "v0.11.0",  # Newest stable, 2025-07-18
+            },
+        },
+        {
+            "name": "Build legba",
+            "command": {
+                "chdir": "#{BBOT_TEMP}/legba",
+                "cmd": "cargo build --release --features http_relative_paths",
+                "creates": "#{BBOT_TEMP}/legba/target/release/legba",
+            },
+            "environment": {"PATH": "{{ ansible_env.PATH }}:{{ ansible_env.HOME }}/.cargo/bin", "RUST_BACKTRACE": "1"},
+        },
+        {
+            "name": "Install legba",
+            "copy": {
+                "src": "#{BBOT_TEMP}/legba/target/release/legba",
+                "dest": "#{BBOT_TOOLS}/",
+                "mode": "u+x,g+x,o+x",
+            },
+        },
+    ]
+
+    async def setup(self):
+        self.output_dir = "/tmp/legba-output"
+        self.helpers.mkdir(self.output_dir)
+
+        return True
+
+    async def filter_event(self, event):
+        handled_protocols = ["ssh", "ftp", "mssql", "mysql", "postgresql", "telnet", "vnc"]
+
+        protocol = event.data["protocol"].lower()
+        if not protocol in handled_protocols:
+            return False, f"service {protocol} is currently not supported or can't be bruteforced by Legba"
+
+        return True
+
+    async def handle_event(self, event):
+        host = str(event.host)
+        port = str(event.port)
+        protocol = event.data["protocol"].lower()
+
+        command_data = await self.construct_command(host, port, protocol)
+
+        if not command_data:
+            self.warning(f"Skipping {host}:{port} ({protocol}) due to errors while constructing the command")
+            return
+
+        command, output_path = command_data
+
+        await self.run_process(command)
+
+        async for new_vuln_event in self.parse_output(output_path, event):
+            await self.emit_event(new_vuln_event)
+
+    async def parse_output(self, output_filepath, event):
+        protocol = event.data["protocol"].lower()
+
+        try:
+            with open(output_filepath) as file:
+                for line in file:
+                    # example line (ssh):
+                    # {"found_at":"2025-07-18T06:28:08.969812152+01:00","target":"localhost:22","plugin":"ssh","data":{"username":"user","password":"pass"},"partial":false}
+                    line = line.strip()
+
+                    try:
+                        data = json.loads(line)["data"]
+                        username = data.get("username", "")
+                        password = data.get("password", "")
+
+                        message_addition = f"{username}:{password}"
+                    except Exception as e:
+                        self.warning(f"Failed to parse Legba output ({line}), using raw output instead: {e}")
+                        message_addition = f"raw output: {line}"
+
+                    yield self.create_vuln_event(
+                        "CRITICAL",
+                        f"Valid {protocol} credentials found - {message_addition}",
+                        event,
+                    )
+        except FileNotFoundError:
+            self.warning(f"Could not open Legba output file {output_filepath}")
+        except Exception as e:
+            self.warning(f"Error processing Legba output file {output_filepath}: {e}")
+        else:
+            self.helpers.delete_file(output_filepath)
+
+    async def construct_command(self, host, port, protocol):
+        # -C                Combo wordlist delimited by ':'
+        # --target          Target (allowed: host, url, IP address, CIDR, @filename)
+        # --output-format   Output file format
+        # --output          Save results to this file
+        # -Q                Do not report statistics
+        #
+        # --wait            Wait time in milliseconds per login attempt
+        # --rate-limit      Limit the number of requests per second
+        # --concurrency     Number of concurrent workers
+
+        # Example command to bruteforce SSH:
+        #
+        # legba ssh -C combolist.txt --target 127.0.0.1:22 --output-format jsonl --output out.txt -Q --wait 4000 --rate-limit 1 --concurrency 1
+
+        try:
+            wordlist_path = await self.helpers.wordlist(self.config.get(f"{protocol}_wordlist"))
+        except WordlistError as e:
+            self.warning(f"Error retrieving wordlist for protocol {protocol}: {e}")
+            return None
+        except Exception as e:
+            self.warning(f"Unexpected error during wordlist loading for protocol {protocol}: {e}")
+            return None
+
+        protocol_plugin_name = map_protocol_to_legba_plugin_name(protocol)
+        output_path = Path(self.output_dir) / f"{host}_{port}.json"
+
+        cmd = [
+            "legba",
+            protocol_plugin_name,
+            "-C",
+            wordlist_path,
+            "--target",
+            f"{host}:{port}",
+            "--output-format",
+            "jsonl",
+            "--output",
+            output_path,
+            "-Q",
+        ]
+
+        if protocol == "ssh":
+            # With OpenSSH 9.8, the sshd_config option "PerSourcePenalties" was introduced (on by default)
+            # The penalty "authfail" defaults to 5 seconds, so bruteforcing fast will block access.
+            # Legba is not able to check that by itself, so the wait time is set to 5 s, rate limit to 1 and concurrency to 1 with SSH.
+            # See https://www.openssh.com/txt/release-9.8
+            cmd += [
+                "--wait",
+                "5000",
+                "--rate-limit",
+                "1",
+                "--concurrency",
+                "1",
+            ]
+        else:
+            cmd += ["--rate-limit", self.config.rate_limit, "--concurrency", self.config.concurrency]
+
+        return cmd, output_path
+
+    def create_vuln_event(self, severity, description, source_event):
+        host = str(source_event.host)
+        port = int(source_event.port)
+
+        return self.make_event(
+            {
+                "severity": severity,
+                "host": host,
+                "port": port,
+                "description": description,
+            },
+            "VULNERABILITY",
+            source_event,
+        )
