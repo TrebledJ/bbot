@@ -57,34 +57,62 @@ class legba(BaseModule):
         {
             "name": "Install dev tools (Debian)",
             "package": {
-                "name": ["libssl-dev", "libsmbclient-dev", "pkg-config", "cmake"],
+                "name": ["pkg-config", "cmake", "libclang-dev", "clang"],
                 "state": "present",
             },
             "become": True,
-            "when": "ansible_facts['distribution'] == 'Debian'",
+            "when": "ansible_facts['os_family'] == 'Debian'",
+            "ignore_errors": True,
+        },
+        {
+            "name": "Install dev tools (Fedora)",
+            "package": {
+                "name": ["pkgconf-pkg-config", "cmake", "clang-devel", "llvm-devel", "perl-core"],
+                "state": "present",
+            },
+            "become": True,
+            "when": "ansible_facts['os_family'] == 'RedHat'",
+            "ignore_errors": True,
+        },
+        {
+            "name": "Install dev tools (Arch)",
+            "package": {
+                "name": ["pkgconf", "cmake", "clang", "openssl"],
+                "state": "present",
+            },
+            "become": True,
+            "when": "ansible_facts['os_family'] == 'Archlinux'",
             "ignore_errors": True,
         },
         {
             "name": "Get legba repo",
             "git": {
                 "repo": "https://github.com/evilsocket/legba",
-                "dest": "#{BBOT_TEMP}/legba",
-                "version": "v0.11.0",  # Newest stable, 2025-07-18
+                "dest": "#{BBOT_TEMP}/legba/gitrepo",
+                "version": "1.1.1",  # Newest stable, 2025-08-25
+            },
+        },
+        {
+            # The git repo will be copied because during build, files and subfolders get created. That prevents the Ansible git module to cache the repo.
+            "name": "Copy legba repo",
+            "copy": {
+                "src": "#{BBOT_TEMP}/legba/gitrepo/",
+                "dest": "#{BBOT_TEMP}/legba/workdir/",
             },
         },
         {
             "name": "Build legba",
             "command": {
-                "chdir": "#{BBOT_TEMP}/legba",
-                "cmd": "cargo build --release --features http_relative_paths",
-                "creates": "#{BBOT_TEMP}/legba/target/release/legba",
+                "chdir": "#{BBOT_TEMP}/legba/workdir",
+                "cmd": "cargo build --release",
+                "creates": "#{BBOT_TEMP}/legba/workdir/target/release/legba",
             },
-            "environment": {"PATH": "{{ ansible_env.PATH }}:{{ ansible_env.HOME }}/.cargo/bin", "RUST_BACKTRACE": "1"},
+            "environment": {"PATH": "{{ ansible_env.PATH }}:{{ ansible_env.HOME }}/.cargo/bin"},
         },
         {
             "name": "Install legba",
             "copy": {
-                "src": "#{BBOT_TEMP}/legba/target/release/legba",
+                "src": "#{BBOT_TEMP}/legba/workdir/target/release/legba",
                 "dest": "#{BBOT_TOOLS}/",
                 "mode": "u+x,g+x,o+x",
             },
