@@ -44,7 +44,7 @@ class legba(BaseModule):
         "ssh_wordlist": "Wordlist URL for SSH combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/ssh-betterdefaultpasslist.txt)",
         "ftp_wordlist": "Wordlist URL for FTP combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/ftp-betterdefaultpasslist.txt)",
         "telnet_wordlist": "Wordlist URL for TELNET combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/telnet-betterdefaultpasslist.txt)",
-        "vnc_wordlist": "Wordlist URL for VNC combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/vnc-betterdefaultpasslist.txt)",
+        "vnc_wordlist": "Wordlist URL for VNC password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/vnc-betterdefaultpasslist.txt)",
         "mssql_wordlist": "Wordlist URL for MSSQL combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/mssql-betterdefaultpasslist.txt)",
         "mysql_wordlist": "Wordlist URL for MySQL combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/mysql-betterdefaultpasslist.txt)",
         "postgresql_wordlist": "Wordlist URL for PostgreSQL combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/postgres-betterdefaultpasslist.txt)",
@@ -126,7 +126,7 @@ class legba(BaseModule):
         return True
 
     async def filter_event(self, event):
-        handled_protocols = ["ssh", "ftp", "mssql", "mysql", "postgresql", "telnet", "vnc"]
+        handled_protocols = ["ssh", "ftp", "telnet", "vnc", "mssql", "mysql", "postgresql"]
 
         protocol = event.data["protocol"].lower()
         if not protocol in handled_protocols:
@@ -167,7 +167,10 @@ class legba(BaseModule):
                         username = data.get("username", "")
                         password = data.get("password", "")
 
-                        message_addition = f"{username}:{password}"
+                        if username:
+                            message_addition = f"{username}:{password}"
+                        else:
+                            message_addition = password
                     except Exception as e:
                         self.warning(f"Failed to parse Legba output ({line}), using raw output instead: {e}")
                         message_addition = f"raw output: {line}"
@@ -186,6 +189,7 @@ class legba(BaseModule):
 
     async def construct_command(self, host, port, protocol):
         # -C                Combo wordlist delimited by ':'
+        # -P                Passwordlist
         # --target          Target (allowed: host, url, IP address, CIDR, @filename)
         # --output-format   Output file format
         # --output          Save results to this file
@@ -214,7 +218,17 @@ class legba(BaseModule):
         cmd = [
             "legba",
             protocol_plugin_name,
-            "-C",
+        ]
+
+        if protocol == "vnc":
+            # use only passwords, not combinations
+            cmd += ["-P"]
+
+        else:
+            # use combinations
+            cmd += ["-C"]
+
+        cmd += [
             wordlist_path,
             "--target",
             f"{host}:{port}",
