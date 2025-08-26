@@ -167,9 +167,11 @@ class legba(BaseModule):
                         username = data.get("username", "")
                         password = data.get("password", "")
 
-                        if username:
+                        if username and password:
                             message_addition = f"{username}:{password}"
-                        else:
+                        elif username:
+                            message_addition = username
+                        elif password:
                             message_addition = password
                     except Exception as e:
                         self.warning(f"Failed to parse Legba output ({line}), using raw output instead: {e}")

@@ -25,7 +25,7 @@ def mock_legba_run_process(monkeypatch, request):
             "ssh": '{"found_at":"2025-07-22T20:50:19.541305293+02:00","target":"127.0.0.1:2222","plugin":"ssh","data":{"username":"remnux","password":"malware"},"partial":false}',
             "ftp": '{"found_at":"2025-07-22T20:51:19.541305293+02:00","target":"127.0.0.1:21","plugin":"ftp","data":{"username":"ftp_boot","password":"ftp_boot"},"partial":false}',
             "telnet": '{"found_at":"2025-07-22T20:51:19.541305293+02:00","target":"127.0.0.1:23","plugin":"telnet","data":{"username":"guest","password":"guest"},"partial":false}',
-            "vnc": '{"found_at":"2025-07-22T20:51:19.541305293+02:00","target":"127.0.0.1:5900","plugin":"vnc","data":{"password":"Administrator"},"partial":false}',
+            "vnc": '{"found_at":"2025-07-22T20:51:19.541305293+02:00","target":"127.0.0.1:5900","plugin":"vnc","data":{"username":"Administrator","password":""},"partial":false}',
             "mssql": '{"found_at":"2025-07-22T20:51:19.541305293+02:00","target":"127.0.0.1:1433","plugin":"mssql","data":{"username":"sa","password":"default"},"partial":false}',
             "mysql": '{"found_at":"2025-07-22T20:51:19.541305293+02:00","target":"127.0.0.1:3306","plugin":"mysql","data":{"username":"root","password":"moves"},"partial":false}',
             "postgresql": '{"found_at":"2025-07-22T20:51:19.541305293+02:00","target":"127.0.0.1:5432","plugin":"pgsql","data":{"username":"postgres","password":"postgres"},"partial":false}',
