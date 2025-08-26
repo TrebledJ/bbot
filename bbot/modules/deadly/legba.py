@@ -183,7 +183,9 @@ class legba(BaseModule):
                         event,
                     )
         except FileNotFoundError:
-            self.info(f"Could not open Legba output file {output_filepath}. File is missing if no valid credentials could be found")
+            self.info(
+                f"Could not open Legba output file {output_filepath}. File is missing if no valid credentials could be found"
+            )
         except Exception as e:
             self.warning(f"Error processing Legba output file {output_filepath}: {e}")
         else:
