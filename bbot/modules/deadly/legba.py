@@ -181,7 +181,7 @@ class legba(BaseModule):
                         event,
                     )
         except FileNotFoundError:
-            self.warning(f"Could not open Legba output file {output_filepath}")
+            self.info(f"Could not open Legba output file {output_filepath}. File is missing if no valid credentials could be found")
         except Exception as e:
             self.warning(f"Error processing Legba output file {output_filepath}: {e}")
         else:
@@ -227,6 +227,10 @@ class legba(BaseModule):
         else:
             # use combinations
             cmd += ["-C"]
+
+        # wrap IPv6 addresses in square brackets
+        if self.helpers.is_ip(host, version=6):
+            host = f"[{host}]"
 
         cmd += [
             wordlist_path,
