@@ -83,9 +83,9 @@ class TestLegba(ModuleTestBase):
 
     def check(self, module_test, events):
         protocol = module_test.request_fixture.getfixturevalue("protocol")
-        vuln_events = [e for e in events if e.type == "VULNERABILITY"]
+        finding_events = [e for e in events if e.type == "FINDING"]
 
-        assert len(vuln_events) == 1
+        assert len(finding_events) == 1
 
         expected_desc = {
             "ssh": "Valid ssh credentials found - remnux:malware",
@@ -97,4 +97,4 @@ class TestLegba(ModuleTestBase):
             "postgresql": "Valid postgresql credentials found - postgres:postgres",
         }
 
-        assert expected_desc[protocol] in vuln_events[0].data["description"]
+        assert expected_desc[protocol] in finding_events[0].data["description"]

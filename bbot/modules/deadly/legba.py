@@ -17,7 +17,7 @@ def map_protocol_to_legba_plugin_name(common_protocol_name: str) -> str:
 
 class legba(BaseModule):
     watched_events = ["PROTOCOL"]
-    produced_events = ["VULNERABILITY"]
+    produced_events = ["FINDING"]
     flags = ["active", "aggressive", "deadly"]
     per_hostport_only = True
     meta = {
@@ -149,8 +149,8 @@ class legba(BaseModule):
 
         await self.run_process(command)
 
-        async for new_vuln_event in self.parse_output(output_path, event):
-            await self.emit_event(new_vuln_event)
+        async for finding_event in self.parse_output(output_path, event):
+            await self.emit_event(finding_event)
 
     async def parse_output(self, output_filepath, event):
         protocol = event.data["protocol"].lower()
@@ -177,10 +177,16 @@ class legba(BaseModule):
                         self.warning(f"Failed to parse Legba output ({line}), using raw output instead: {e}")
                         message_addition = f"raw output: {line}"
 
-                    yield self.create_vuln_event(
-                        "CRITICAL",
-                        f"Valid {protocol} credentials found - {message_addition}",
-                        event,
+                    yield self.make_event(
+                        {
+                            "severity": "CRITICAL",
+                            "confidence": "CONFIRMED",
+                            "host": str(event.host),
+                            "port": str(event.port),
+                            "description": f"Valid {protocol} credentials found - {message_addition}",
+                        },
+                        "FINDING",
+                        parent=event,
                     )
         except FileNotFoundError:
             self.info(
@@ -264,18 +270,3 @@ class legba(BaseModule):
             cmd += ["--rate-limit", self.config.rate_limit, "--concurrency", self.config.concurrency]
 
         return cmd, output_path
-
-    def create_vuln_event(self, severity, description, source_event):
-        host = str(source_event.host)
-        port = int(source_event.port)
-
-        return self.make_event(
-            {
-                "severity": severity,
-                "host": host,
-                "port": port,
-                "description": description,
-            },
-            "VULNERABILITY",
-            source_event,
-        )
