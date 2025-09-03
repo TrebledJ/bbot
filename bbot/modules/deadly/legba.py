@@ -41,15 +41,15 @@ class legba(BaseModule):
     }
 
     options_desc = {
-        "ssh_wordlist": "Wordlist URL for SSH combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/ssh-betterdefaultpasslist.txt)",
-        "ftp_wordlist": "Wordlist URL for FTP combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/ftp-betterdefaultpasslist.txt)",
-        "telnet_wordlist": "Wordlist URL for TELNET combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/telnet-betterdefaultpasslist.txt)",
-        "vnc_wordlist": "Wordlist URL for VNC password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/vnc-betterdefaultpasslist.txt)",
-        "mssql_wordlist": "Wordlist URL for MSSQL combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/mssql-betterdefaultpasslist.txt)",
-        "mysql_wordlist": "Wordlist URL for MySQL combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/mysql-betterdefaultpasslist.txt)",
-        "postgresql_wordlist": "Wordlist URL for PostgreSQL combined username:password wordlist, newline separated (default https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Default-Credentials/postgres-betterdefaultpasslist.txt)",
-        "concurrency": "Number of concurrent workers, gets overridden for SSH (default 3)",
-        "rate_limit": "Limit the number of requests per second, gets overridden for SSH (default 3)",
+        "ssh_wordlist": "Wordlist URL for SSH combined username:password wordlist, newline separated",
+        "ftp_wordlist": "Wordlist URL for FTP combined username:password wordlist, newline separated",
+        "telnet_wordlist": "Wordlist URL for TELNET combined username:password wordlist, newline separated",
+        "vnc_wordlist": "Wordlist URL for VNC password wordlist, newline separated",
+        "mssql_wordlist": "Wordlist URL for MSSQL combined username:password wordlist, newline separated",
+        "mysql_wordlist": "Wordlist URL for MySQL combined username:password wordlist, newline separated",
+        "postgresql_wordlist": "Wordlist URL for PostgreSQL combined username:password wordlist, newline separated",
+        "concurrency": "Number of concurrent workers, gets overridden for SSH",
+        "rate_limit": "Limit the number of requests per second, gets overridden for SSH",
     }
 
     deps_common = ["rust"]
@@ -120,7 +120,7 @@ class legba(BaseModule):
     ]
 
     async def setup(self):
-        self.output_dir = "/tmp/legba-output"
+        self.output_dir = self.scan.temp_dir / "legba-output"
         self.helpers.mkdir(self.output_dir)
 
         return True
