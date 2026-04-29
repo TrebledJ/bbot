@@ -1867,7 +1867,7 @@ def can_sudo_without_password():
         try:
             sp.run(["sudo", "-K"], stderr=sp.DEVNULL, stdout=sp.DEVNULL, check=True, env=env)
             sp.run(["sudo", "-An", "/bin/true"], stderr=sp.DEVNULL, stdout=sp.DEVNULL, check=True, env=env)
-        except sp.CalledProcessError:
+        except sp.CalledProcessError, FileNotFoundError:
             return False
     return True
 
